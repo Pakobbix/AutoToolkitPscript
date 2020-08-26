@@ -1,4 +1,100 @@
-$host.ui.RawUI.WindowTitle = “WWiU Script”
+$host.ui.RawUI.WindowTitle = â€œWWiU Scriptâ€
+$version = "0.7"
+$githubver = "https://raw.githubusercontent.com/Pakobbix/AutoToolkitPscript/master/currentversion.txt"
+$updatefile = "https://raw.githubusercontent.com/Pakobbix/AutoToolkitPscript/master/Auto%20start%20Toolkit.ps1"
+# WWiU Steht fÃ¼r Windows with integrated Updates. 
+# Dieses Skript ist aus neugierde und aus dem Mangel an Automatismus unserer Firma entstanden.
+# Selbst unsere NAS-Server LÃ¶sung ist eher trÃ¤ge und erfordert zu oft einschreiten seitens der Techniker.
+# Das Skript soll abhilfe schaffen.
+#
+# Was genau macht das Skript?
+#
+# Das Skript Verbindet verschiedene Tools um am ende eine Windows 10 Iso zuu erstellen, die alle updates beinhaltet.
+# Man kann entweder direkt ein USB-Stick damit bespielen, oder die ISO einfach auf die Zielcomputer kopieren und von da aus bereitstellen.
+# Anders als bei WSUSoffline muss nicht erst das Funktionsupdate gemacht werden, dann WSUS Client gestartet werden und dann hoffen, dass man kein TempAdmin
+# Account vorfindet. AuÃŸer natÃ¼rlich bei Windows S Mode GerÃ¤te. Da geht WSUS sowieso nicht. 
+#
+# Bei der Erstellten Windows ISO muss nichts weiter getan werden, als das Setup.exe ausgefÃ¼hrt werden. Das Setup fÃ¼hrt automatisch das Funktions-Update aus, 
+# und installiert anschlieÃŸend ohne fremde Einwirkung die Windows Kumulativen Updates. 
+#
+#
+# Im Moment funktioniert das Skript soweit schonmal. Geplant ist noch:
+# 
+# Eine Auto-Update funktion, um den prozess weiter zu automatisieren
+#
+# Das einfÃ¼gen einer Setup.exe mit Parametern (/auto upgrade /dynamicupdate disable). Damit auch das Automatisch ablÃ¤uft.
+#
+# Das Automatische hinzufÃ¼gen einer alle 2 Wochen auszufÃ¼hrenden Aufgabenplanung in Windows.
+#
+# Optimierungen der InVoke-WebRequest Befehle mit Progress Anzeige (Write-Progress funktioniert nicht mit der StopLoop function)
+
+function UpdatesAvailable()
+{
+	$updateavailable = $false
+	$nextversion = $null
+	try
+	{
+		$nextversion = (New-Object System.Net.WebClient).DownloadString($githubver).Trim([Environment]::NewLine)
+	}
+	catch [System.Exception] 
+	{
+		Write-Message $_ "debug"
+	}
+	
+	Write-Message "Aktuelle Version: $version" "debug"
+	Write-Message "Neuere Version: $nextversion" "debug"
+	if ($nextversion -ne $null -and $version -ne $nextversion)
+	{
+		#An update is most likely available, but make sure
+		$updateavailable = $false
+		$curr = $version.Split('.')
+		$next = $nextversion.Split('.')
+		for($i=0; $i -le ($curr.Count -1); $i++)
+		{
+			if ([int]$next[$i] -gt [int]$curr[$i])
+			{
+				$updateavailable = $true
+				break
+			}
+		}
+	}
+	return $updateavailable
+}
+
+function Process-Updates()
+{
+	if (Test-Connection 8.8.8.8 -Count 1 -Quiet)
+	{
+		$updatepath = "$($PWD.Path)\update.ps1"
+		if (Test-Path -Path $updatepath)	
+		{
+			#Remove-Item $updatepath
+		}
+		if (UpdatesAvailable)
+		{
+			Write-Message "Update available. Do you want to update luckystrike? Your payloads/templates will be preserved." "success"
+			$response = Read-Host "`nPlease select Y or N"
+			while (($response -match "[YyNn]") -eq $false)
+			{
+				$response = Read-Host "This is a binary situation. Y or N please."
+			}
+
+			if ($response -match "[Yy]")
+			{	
+				(New-Object System.Net.Webclient).DownloadFile($updatefile, $updatepath)
+				Start-Process PowerShell -Arg $updatepath
+				exit
+			}
+		}
+	}
+	else
+	{
+		Write-Message "Es konnte nicht nach Aktualisierungen geprÃ¼ft werden." "WARNUNG!"
+	}
+}
+
+
+
 #Wir testen erstmal, ob noch genug Speicher vorhanden ist, um alles vorzubereiten.
 
 $drives = @("C");
@@ -38,11 +134,12 @@ foreach ($d in $drives) {
     }
 }
 
-## Als erstes Entfernen wir alte Dateien. Für die Automatisierung müsste WSUS Offline und Toolkit entfernt werden. Man könnte auch alte dateien überschreiben
-# Aber dies könnte in zukunft probleme Verursachen, daher machen wir das system erstmal sauber.
+## Als erstes Entfernen wir alte Dateien. FÃ¼r die Automatisierung mÃ¼sste WSUS Offline und Toolkit entfernt werden. Man kÃ¶nnte auch alte dateien Ã¼berschreiben
+# Aber dies kÃ¶nnte in zukunft probleme Verursachen, daher machen wir das system erstmal sauber.
 
 
 gci C:\WWiU\wsusoffline -Recurse -Exclude @('*.cab','builddate.txt','catalogdate.txt','ndp*.exe', '*.msu') | ? { ! $_.PSIsContainer } | Remove-Item -Force
+rmdir "C:\WWiU\Toolkit_v10.2" -r
 rmdir "C:\WWiU\Toolkit_v10.3" -r
 
 # Wir erstellen erstmal einen neuen Ordner damit es einfacher ist
@@ -52,8 +149,8 @@ Write-Host
 mkdir > $null "C:\WWiU\Toolkit_v10.3" 
 
 #Diese Beiden Skripte sind Anpassung an das Toolkit, damit man keine eingaben Vornehmen muss. 
-#StartAuto.cmd wird benötigt um die Umgebungsvariablen fürs Toolkit zu setzen. Damit die Auto unud nicht die normale version geladen wird, habe ich hier eigentlich nur den Befehl entsprechend angepasst.
-#ToolkitAuto.cmd ist die wirkliche Arbeit gewesen. Im Grunde habe ich nur überall die "choice" befehle durch direkte angaben ersetzt. Dadurch muss man keine eingaben per Hand mehr eingeben und kann einfach 
+#StartAuto.cmd wird benÃ¶tigt um die Umgebungsvariablen fÃ¼rs Toolkit zu setzen. Damit die Auto unud nicht die normale version geladen wird, habe ich hier eigentlich nur den Befehl entsprechend angepasst.
+#ToolkitAuto.cmd ist die wirkliche Arbeit gewesen. Im Grunde habe ich nur Ã¼berall die "choice" befehle durch direkte angaben ersetzt. Dadurch muss man keine eingaben per Hand mehr eingeben und kann einfach 
 #darauf warten, das der Laptop/PC alles abgearbeitet hat. Die Fertige Windows ISO wird dann ins ISO verzeichnis vom Toolkit erstellt. Am Ende wird diese dann auf den Desktop kopiert, damit sie einfach zu finden ist.
 
 #copy StartAuto.cmd "C:\WWiU\Toolkit_v10.3\"
@@ -63,7 +160,7 @@ mkdir > $null "C:\WWiU\Toolkit_v10.3"
 set-location C:\
 
 # Es scheint so, als ob die Fortschrittsanzeige den Download immens verlangsamt. Daher schalten wir diese mit dem Befehl
-# Für alle folgenden InVoke-WebRequest anfragen aus.
+# FÃ¼r alle folgenden InVoke-WebRequest anfragen aus.
 #$ProgressPreference = 'SilentlyContinue'
 
 # Hier Laden wir das Toolkit und WSUSoffline Programm runter.
@@ -84,7 +181,7 @@ $Stoploop = $true
 catch {
 if ($Retrycount -gt 3){
 Write-Host
-Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es Später noch einmal"
+Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es SpÃ¤ter noch einmal"
 Write-Host
 pause
 exit
@@ -117,7 +214,7 @@ $Stoploop = $true
 catch {
 if ($Retrycount -gt 3){
 Write-Host
-Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es Später noch einmal"
+Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es SpÃ¤ter noch einmal"
 Write-Host
 pause
 exit
@@ -131,7 +228,7 @@ $Retrycount = $Retrycount + 1
 }
 }
 While ($Stoploop -eq $false)
-# Rufus wird später benötigt für die Erstellung eines Windows10 USB-Sticks. Daher laden wir hier die Portable Version runter damit diese dann einfach ausgeführt werden kann.
+# Rufus wird spÃ¤ter benÃ¶tigt fÃ¼r die Erstellung eines Windows10 USB-Sticks. Daher laden wir hier die Portable Version runter damit diese dann einfach ausgefÃ¼hrt werden kann.
 Write-Host
 Write-Host
 Write-Host -ForegroundColor Yellow ======================== Lade Rufus 3.11 Portable herunter. =======================
@@ -149,7 +246,7 @@ $Stoploop = $true
 catch {
 if ($Retrycount -gt 3){
 Write-Host
-Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es Später noch einmal"
+Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es SpÃ¤ter noch einmal"
 Write-Host
 pause
 exit
@@ -194,18 +291,16 @@ Write-Host
 Write-Host -ForegroundColor Green ======================== Backup der Toolkit.cmd Erstellt =======================
 Write-Host
 Write-Host
-Write-Host 
-Write-Host
 Write-Host -ForegroundColor Yellow =================== Entferne Eingabeaufforderungen aus der Toolkit.cmd ==================
+Write-Host
+# Hier geben wir die Toolkit.cmd an, um diese im nÃ¤chsten Schritt zu verÃ¤ndern.
+$file = "C:\WWiU\Toolkit_v10.3\Toolkit.cmd"
 
-# Hier geben wir die Toolkit.cmd an, um diese im nächsten Schritt zu verändern.
-$file = "C:\Users\Exekutive\Downloads\ToolKit_v10.3\Toolkit2.cmd"
-
-# Der Befehl dient dazu, die CMD durch die Powershell lesbar zu machen und lädt deren Inhalt.
+# Der Befehl dient dazu, die CMD durch die Powershell lesbar zu machen und lÃ¤dt deren Inhalt.
 $content = Get-Content -Path $file
 
-# Jetzt werden die einzelnen Zeilen der Toolkit.cmd so verändert, dass jegliche User eingabe durch automatische Eingaben ersetzt wird, bzw. es für User eingaben keine Möglichkeit mehr gibt.
-# Wichtig zu beachten ist, das es immer -1 Zeile ist. Will man also den Text in Zeile 24 ändern, so setzt man die Zahl 23 in eckige Klammern.
+# Jetzt werden die einzelnen Zeilen der Toolkit.cmd so verÃ¤ndert, dass jegliche User eingabe durch automatische Eingaben ersetzt wird, bzw. es fÃ¼r User eingaben keine MÃ¶glichkeit mehr gibt.
+# Wichtig zu beachten ist, das es immer -1 Zeile ist. Will man also den Text in Zeile 24 Ã¤ndern, so setzt man die Zahl 23 in eckige Klammern.
 
 $content[175] = "::choice /C AR /N /M ::::::::::::::::::::::::::::::::::::::::::::::::::::::[ 'A'ccept / 'R'eject ]::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
 $content[176] = '::if errorlevel 2 ('
@@ -251,12 +346,12 @@ $content[2971] = '::)'
 $content[2974] = 'if "1" equ "*" call :GetImageIndexInfo "%InstallWim%", 1 >nul'
 $content[2975] = 'if "1" neq "*" call :GetImageIndexInfo "%InstallWim%", %ImageIndexNo% >nul'
 
-$content[2992] = '::choice /C:YN /N /M "Do you want to mount Windows Setup Boot Image ? ['Y'es/'N'o] : "'
+$content[2992] = '::choice /C:YN /N /M "Do you want to mount Windows Setup Boot Image ? [Yes/No] : "'
 $content[2993] = '::if "%errorlevel%" equ "1" set "IsBootImageSelected=Yes"'
 $content[2994] = '::if "%errorlevel%" equ "2" set "IsBootImageSelected=No"'
 $content[2995] = 'set "IsBootImageSelected=Yes"'
 $content[2996] = 'echo.'
-$content[2997] = '::choice /C:YN /N /M "Do you want to mount Windows Recovery Image ? ['Y'es/'N'o] : "'
+$content[2997] = '::choice /C:YN /N /M "Do you want to mount Windows Recovery Image ? [Yes/No] : "'
 $content[2998] = 'if "%errorlevel%" equ "1" set "IsRecoveryImageSelected=Yes"'
 $content[2999] = '::if "%errorlevel%" equ "2" set "IsRecoveryImageSelected=No"'
 $content[3000] = 'set "IsRecoveryImageSelected=Yes"'
@@ -330,6 +425,7 @@ $content[26402] = '::pause'
 
 # Set the new content
 $content | Set-Content -Path $file
+Write-Host
 Write-Host -ForegroundColor Green =================== Eingabeaufforderungen aus der Toolkit.cmd Entfernt ==================
 Write-Host
 Write-Host
@@ -344,7 +440,7 @@ Write-Host -ForegroundColor Green ============ Extraktion von WSUSoffline 12.2 C
 
 Write-Host
 Write-Host
-Write-Host -ForegroundColor Yellow ========================= Lösche nicht benötigte Daten. ===========================
+Write-Host -ForegroundColor Yellow ========================= LÃ¶sche nicht benÃ¶tigte Daten. ===========================
 Write-Host
 Write-Host
 
@@ -352,7 +448,7 @@ rmdir "C:\WWiU/__MACOSX" -r
 rm "C:\WWiU/Toolkit.zip"
 rm "C:\WWiU/wsusoffline.zip"
 
-Write-Host -ForegroundColor Green ========================= Löschung war erfoglreich. ===========================
+Write-Host -ForegroundColor Green ========================= LÃ¶schung war erfoglreich. ===========================
 
 
 # Hier laden wir die Aktuelle Windows 10 Version runter, direkt von Microsoft.
@@ -367,14 +463,14 @@ $Stoploop = $false
 
 do {
 try {
-InVoke-WebRequest "https://software-download.microsoft.com/db/Win10_2004_German_x64.iso?t=c4bb5b2d-d6c6-4472-ad55-4a6122aa3938&e=1598378526&h=8d94146cb416639267f062ac36aa95da" -o "C:\WWiU\Toolkit_v10.3\ISO\Windows 10.iso"
+InVoke-WebRequest "https://software-download.microsoft.com/db/Win10_2004_German_x64.iso?t=4be51806-204a-4e64-933a-8661221eec2d&e=1598508126&h=03e35ffcd88ef8e55ffcf68a3d0d1c98" -o "C:\WWiU\Toolkit_v10.3\ISO\Windows 10.iso"
 Write-Host -ForegroundColor Green "=========================== Windows 10 ISO heruntergeladen ============================"
 $Stoploop = $true
 }
 catch {
 if ($Retrycount -gt 3){
 Write-Host
-Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es Später noch einmal"
+Write-Host -ForegroundColor Red "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es SpÃ¤ter noch einmal"
 Write-Host
 pause
 exit
@@ -404,10 +500,10 @@ Write-Host
 
 # Nun kopieren wir die runtergeladenen Updates zum MSMG Toolkit Updates Ordner damit toolkit diese Einbinden kann.
 
-# Parameter Erkärung:
+# Parameter ErkÃ¤rung:
 # /f = Zeige kopierende Dateien an.
-# /v = überprüft die Dateien, ob diese Identisch sind.
-# /y = Überschreibt automatisch bereits vorhandene Dateien ohne abfrage (Für die Automatisierung)
+# /v = Ã¼berprÃ¼ft die Dateien, ob diese Identisch sind.
+# /y = Ãœberschreibt automatisch bereits vorhandene Dateien ohne abfrage (FÃ¼r die Automatisierung)
 
 Write-Host
 Write-Host
@@ -425,7 +521,7 @@ Write-Host -ForegroundColor Yellow ======== Starte die Erstellung einer Windows 
 Write-Host
 Write-Host
 
-Start-Process "C:\WWiU\Toolkit_v10.3\StartAuto.cmd" -NoNewWindow -Wait
+Start-Process "C:\WWiU\Toolkit_v10.3\Start.cmd" -NoNewWindow -Wait
 
 Write-Host
 Write-Host
@@ -459,7 +555,7 @@ C:\WWiU\rufus-3.11p.exe
 #}
 #catch {
 #if ($Retrycount -gt 3){
-#Write-Host "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es Später noch einmal"
+#Write-Host "Es wurde mehr als 3x die Verbindung beim Downloaden unterbrochen. Teste eure Internetverbindung oder probiere es SpÃ¤ter noch einmal"
 #$Stoploop = $true
 #}
 #else {
