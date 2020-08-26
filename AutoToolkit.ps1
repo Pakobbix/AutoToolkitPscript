@@ -1,4 +1,5 @@
 $host.ui.RawUI.WindowTitle = “WWiU Script”
+$version 0.7
 # WWiU Steht für Windows with integrated Updates. 
 # Dieses Skript ist aus neugierde und aus dem Mangel an Automatismus unserer Firma entstanden.
 # Selbst unsere NAS-Server Lösung ist eher träge und erfordert zu oft einschreiten seitens der Techniker.
@@ -87,7 +88,7 @@ Param(
   [switch]$Version
 )
 
-$MyVersion = '0.6'
+$MyVersion = '0.7'
 
 if ($Version.IsPresent) {
   $MyVersion
