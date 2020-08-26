@@ -1,7 +1,7 @@
 $host.ui.RawUI.WindowTitle = “WWiU Script”
 $version = "0.7"
 $githubver = "https://raw.githubusercontent.com/Pakobbix/AutoToolkitPscript/master/currentversion.txt"
-$updatefile = "https://raw.githubusercontent.com/Pakobbix/AutoToolkitPscript/master/Auto%20start%20Toolkit.ps1"
+$updatefile = "https://github.com/Pakobbix/AutoToolkitPscript/blob/master/update.ps1"
 # WWiU Steht für Windows with integrated Updates. 
 # Dieses Skript ist aus neugierde und aus dem Mangel an Automatismus unserer Firma entstanden.
 # Selbst unsere NAS-Server Lösung ist eher träge und erfordert zu oft einschreiten seitens der Techniker.
